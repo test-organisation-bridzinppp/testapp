@@ -1,0 +1,45 @@
+https://medium.com/@venkat65534/full-stack-observability-with-grafana-prometheus-loki-tempo-and-opentelemetry-90839113d17d
+
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+helm install prometheus prometheus-community/prometheus -n observability --create-namespace
+
+helm install loki grafana/loki-stack -n observability --set promtail.enabled=true
+
+helm install tempo grafana/tempo-distributed -n observability
+
+helm install grafana grafana/grafana -n observability --set adminPassword='admin' --set service.type=NodePort
+
+kubectl port-forward svc/grafana 3000:80 -n observability
+
+# otel collector
+
+helm install otel-collector open-telemetry/opentelemetry-collector -n observability \
+  --set mode=deployment \
+  --set config.receivers.otlp.protocols.grpc={} \
+  --set config.receivers.otlp.protocols.http={} \
+  --set config.exporters.prometheus.endpoint="0.0.0.0:8889" \
+  --set config.exporters.loki.endpoint="http://loki:3100/loki/api/v1/push" \
+  --set config.exporters.otlp.endpoint="tempo:4317" \
+  --set config.service.pipelines.logs.exporters="[loki]" \
+  --set config.service.pipelines.traces.exporters="[otlp]" \
+  --set config.service.pipelines.metrics.exporters="[prometheus]"
+
+# Configuration grafana - Configuration/ Data Sources
+
+Prometheus: https://prometheus:9090
+Loki: https://loki:3100
+Tempo: https://tempo:3100
+
+# Dashboards:
+
+Use the Import option and load dashboards from Grafana’s official dashboard library (Compatible with Grafana 8.0+):
+
+Prometheus Node Exporter: ID 1860
+Kubernetes Monitoring: ID 315
+Loki Log Search: ID 15172
+Tempo Trace Viewer: ID 13615
+
